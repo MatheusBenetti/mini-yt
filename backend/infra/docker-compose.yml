@@ -1,0 +1,138 @@
+services:
+  postgres-auth:
+    image: postgres:16-alpine
+    container_name: mini-yt-postgres-auth
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_password
+    ports:
+      - "5541:5432"
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
+    networks:
+      - mini-yt-network
+
+  postgres-video:
+    image: postgres:16-alpine
+    container_name: mini-yt-postgres-video
+    environment:
+      POSTGRES_DB: video_db
+      POSTGRES_USER: video_user
+      POSTGRES_PASSWORD: video_password
+    ports:
+      - "5542:5432"
+    volumes:
+      - postgres_video_data:/var/lib/postgresql/data
+    networks:
+      - mini-yt-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: mini-yt-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio_user
+      MINIO_ROOT_PASSWORD: minio_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - mini-yt-network
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: mini-yt-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbit_user
+      RABBITMQ_DEFAULT_PASS: rabbit_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - mini-yt-network
+
+  auth-service:
+    build:
+      context: ../services/auth-service
+      dockerfile: Dockerfile
+    container_name: mini-yt-auth-service
+    environment:
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: auth_user
+      SPRING_DATASOURCE_PASSWORD: auth_password
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres-auth
+    networks:
+      - mini-yt-network
+
+  video-service:
+    build:
+      context: ../services/video-service
+      dockerfile: Dockerfile
+    container_name: mini-yt-video-service
+    environment:
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-video:5432/video_db
+      SPRING_DATASOURCE_USERNAME: video_user
+      SPRING_DATASOURCE_PASSWORD: video_password
+    ports:
+      - "8082:8082"
+    depends_on:
+      - postgres-video
+    networks:
+      - mini-yt-network
+
+  storage-service:
+    build:
+      context: ../services/storage-service
+      dockerfile: Dockerfile
+    container_name: mini-yt-storage-service
+    environment:
+      SERVER_PORT: 8083
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minio_user
+      MINIO_SECRET_KEY: minio_password
+      MINIO_BUCKET: videos
+    ports:
+      - "8083:8083"
+    depends_on:
+      - minio
+    networks:
+      - mini-yt-network
+
+  gateway-service:
+    build:
+      context: ../services/gateway-service
+      dockerfile: Dockerfile
+    container_name: mini-yt-gateway-service
+    environment:
+      SERVER_PORT: 8080
+      AUTH_SERVICE_URL: http://auth-service:8081
+      VIDEO_SERVICE_URL: http://video-service:8082
+      STORAGE_SERVICE_URL: http://storage-service:8083
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - video-service
+      - storage-service
+    networks:
+      - mini-yt-network
+
+volumes:
+  postgres_auth_data:
+  postgres_video_data:
+  minio_data:
+  rabbitmq_data:
+
+networks:
+  mini-yt-network:
+    driver: bridge
