@@ -8,11 +8,12 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 public class AuthenticatedUser implements UserDetails {
 
-    private final Long userId;
+    private final UUID userId;
     private final String name;
     private final String email;
     private final String password;
@@ -20,7 +21,7 @@ public class AuthenticatedUser implements UserDetails {
     private final boolean active;
 
     public AuthenticatedUser(
-            Long userId,
+            UUID userId,
             String name,
             String email,
             String password,
